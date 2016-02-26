@@ -7,13 +7,17 @@
 # Run with:
 # docker run -p 5601:5601 -p 9200:9200 -p 5000:5000 -it --name elk <repo-user>/elk
 
-FROM phusion/baseimage
-MAINTAINER Sebastien Pujadas http://pujadas.net
-ENV REFRESHED_AT 2016-02-03
+FROM ubuntu
+ 
+#FROM java:8-jre 
+#MAINTAINER Sebastien Pujadas http://pujadas.net
+#ENV REFRESHED_AT 2016-02-23
+
 
 ###############################################################################
 #                                INSTALLATION
 ###############################################################################
+
 
 ### install Elasticsearch
 
@@ -26,9 +30,32 @@ RUN echo deb http://packages.elasticsearch.org/elasticsearch/2.x/debian stable m
 RUN apt-get update -qq \
  && apt-get install -qqy \
 		elasticsearch=2.2.0 \
-		openjdk-7-jdk \
  && apt-get clean
 
+#Install Oracle Java 7
+RUN echo 'deb http://ppa.launchpad.net/webupd8team/java/ubuntu precise main' > /etc/apt/sources.list.d/java.list && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys EEA14886 && \
+    apt-get update && \
+    echo oracle-java7-installer shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y oracle-java7-installer
+
+#SSHD
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server && \
+	mkdir /var/run/sshd && chmod 700 /var/run/sshd && \
+	echo 'root:root' |chpasswd
+
+#Utilities
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y vim less nano maven ntp net-tools inetutils-ping curl git telnet
+
+#LogGenerator
+RUN git clone https://github.com/vspiewak/log-generator.git && \
+	cd log-generator && \
+	/usr/share/maven/bin/mvn clean package
+
+#Geo
+RUN wget -N http://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz && \
+	gunzip GeoLiteCity.dat.gz && \
+    mv GeoLiteCity.dat /log-generator/GeoLiteCity.dat
 
 ### install Logstash
 
@@ -95,6 +122,7 @@ ADD ./30-output.conf /etc/logstash/conf.d/30-output.conf
 
 # patterns
 ADD ./nginx.pattern ${LOGSTASH_HOME}/patterns/nginx
+ADD ./logback ${LOGSTASH_HOME}/patterns/logback
 RUN chown -R logstash:logstash ${LOGSTASH_HOME}/patterns
 
 
